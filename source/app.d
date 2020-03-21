@@ -1,4 +1,5 @@
 import std;
+import derelict.sdl2.sdl;
 
 struct registers {
 	struct {
@@ -67,102 +68,25 @@ registers reg;
 ubyte [65536] mem;
 ubyte [256] bootmem;
 
-ubyte memGet(ushort i)
-{
-   if(i <= 0x0100)
-   {
-      if(mem[0xFF50])
-      {
-         return mem[i];
-      }
-      else
-      {
-         return bootmem[i];
-      }
-   }
-   return mem[i];
-}
-void memSet(ubyte t, ushort i)
-{
-   if(i <= 0x0100)
-   {
-      if(mem[0xFF50])
-      {
-         mem[i] = t;
-      }
-      else
-      {
-         bootmem[i] = t;
-      }
-   }
-   mem[i] = t;
-}
-
 int numCyclesPerRefresh = 70224;
+const int WIDTH = 160, HEIGHT = 144;
 
-int getZ()
+// display pixels on screen
+void dispPixels(uint [] pixels, SDL_Surface* windowSurface, SDL_Window *window)
 {
-   return reg.f & (1 << 7);
-}
-int getN()
-{
-   return reg.f & (1 << 6);
-}
-int getH()
-{
-   return reg.f & (1 << 5);
-}
-int getC()
-{
-   return reg.f & (1 << 4);
-}
-void setZ(int b)
-{
-   if(b)
-   {
-      reg.f |= 0b10000000;
-   }
-   else
-   {
-      reg.f &= 0b01111111;
-   }
-}
-void setN(int b)
-{
-   if(b)
-   {
-      reg.f |= 0b01000000;
-   }
-   else
-   {
-      reg.f &= 0b10111111;
-   }
-}
-void setH(int b)
-{
-   if(b)
-   {
-      reg.f |= 0b00100000;
-   }
-   else
-   {
-      reg.f &= 0b11011111;
-   }
-}
-void setC(int b)
-{
-   if(b)
-   {
-      reg.f |= 0b00010000;
-   }
-   else
-   {
-      reg.f &= 0b11101111;
-   }
+	uint rmask = 0xff000000;
+	uint gmask = 0x00ff0000;
+	uint bmask = 0x0000ff00;
+	uint amask = 0x000000ff;
+	SDL_Surface* dispSurface = SDL_CreateRGBSurfaceFrom(cast(void *) pixels, 160, 144, 32, 160*4, rmask, gmask, bmask, amask);
+	SDL_BlitSurface(dispSurface, null, windowSurface, null);
+	SDL_FreeSurface(dispSurface);
+	SDL_UpdateWindowSurface(window);
 }
 
 void main()
 {
+   // load boot rom and cartridge into memory
    File boot = File("roms/boot.bin", "r"); 
    File game = File("roms/tetris.gb", "r"); 
 
@@ -182,16 +106,60 @@ void main()
    }
    game.close(); 
 
+   // init SDL for screen
+   DerelictSDL2.load();
+	SDL_Init(SDL_INIT_EVERYTHING);
+	SDL_Window *window = SDL_CreateWindow( "gamebb", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, WIDTH, HEIGHT, SDL_WINDOW_ALLOW_HIGHDPI );
+	if (!window)
+    {
+        writeln("Window creation unsuccessful");
+        return;
+    }
+	SDL_Surface* windowSurface = SDL_GetWindowSurface(window);
 
-   for(int i = 0; i < 10; i++)
+   SDL_Event windowEvent;
+
+   uint [160*144] pixels;
+	pixels[] = 0xffffffff;
+   uint iii = 0;
+   // run cpu
+   while (1)
    {
+      if (SDL_PollEvent(&windowEvent))
+      {
+         if (windowEvent.type == SDL_QUIT)
+         {
+            break;
+         }
+      }
+
       int ret = step();      
-      writeln("how about we print here!");
       if(!ret)
       {
          break;
       }
+      else
+      {
+         if(pixels[iii] == 0x000000ff)
+         {
+            pixels[iii] = 0xffffffff;
+         }
+         else
+         {
+            pixels[iii] = 0x000000ff;
+         }
+         iii++;
+         if(iii ==  160*144)
+         {
+            iii = 0;
+         }
+	      dispPixels(pixels, windowSurface, window);
+      }
    }
+
+   SDL_FreeSurface(windowSurface);
+   SDL_DestroyWindow(window);
+   SDL_Quit();
 }
 
 void dispReg()
@@ -206,7 +174,7 @@ int step()
    {
       ubyte inst = memGet(reg.pc);
       // writef("INST: 0x%.2X\n", inst);
-      writef("INST: 0x%.2X, IO REG: 0x%.2X\n", inst, memGet(0xFF50));
+      // writef("INST: 0x%.2X, IO REG: 0x%.2X\n", inst, memGet(0xFF50));
       if(memGet(0xFF50))
       {
          writeln("helloworld");
@@ -563,11 +531,103 @@ int step()
             writef("Invalid Instruction: 0x%.2X\n", memGet(reg.pc));
             return 0;
       }
-      dispReg();
+      // dispReg();
       if(reg.pc == 0)
       {
          return 0;
       }
    }
    return 1;
+}
+
+ubyte memGet(ushort i)
+{
+   if(i <= 0x0100)
+   {
+      if(mem[0xFF50])
+      {
+         return mem[i];
+      }
+      else
+      {
+         return bootmem[i];
+      }
+   }
+   return mem[i];
+}
+void memSet(ubyte t, ushort i)
+{
+   if(i <= 0x0100)
+   {
+      if(mem[0xFF50])
+      {
+         mem[i] = t;
+      }
+      else
+      {
+         bootmem[i] = t;
+      }
+   }
+   mem[i] = t;
+}
+
+int getZ()
+{
+   return reg.f & (1 << 7);
+}
+int getN()
+{
+   return reg.f & (1 << 6);
+}
+int getH()
+{
+   return reg.f & (1 << 5);
+}
+int getC()
+{
+   return reg.f & (1 << 4);
+}
+void setZ(int b)
+{
+   if(b)
+   {
+      reg.f |= 0b10000000;
+   }
+   else
+   {
+      reg.f &= 0b01111111;
+   }
+}
+void setN(int b)
+{
+   if(b)
+   {
+      reg.f |= 0b01000000;
+   }
+   else
+   {
+      reg.f &= 0b10111111;
+   }
+}
+void setH(int b)
+{
+   if(b)
+   {
+      reg.f |= 0b00100000;
+   }
+   else
+   {
+      reg.f &= 0b11011111;
+   }
+}
+void setC(int b)
+{
+   if(b)
+   {
+      reg.f |= 0b00010000;
+   }
+   else
+   {
+      reg.f &= 0b11101111;
+   }
 }
