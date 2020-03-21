@@ -185,15 +185,13 @@ void main()
 
    for(int i = 0; i < 10; i++)
    {
-      int ret = step();
-      
+      int ret = step();      
+      writeln("how about we print here!");
       if(!ret)
       {
          break;
       }
    }
-   
-   
 }
 
 void dispReg()
@@ -207,33 +205,31 @@ int step()
    while(numCycles < numCyclesPerRefresh)
    {
       ubyte inst = memGet(reg.pc);
-      writef("INST: 0x%.2X\n", inst);
-      // writef("INST: 0x%.2X, IO REG: 0x%.2X\n", inst, memGet(0xFF50));
+      // writef("INST: 0x%.2X\n", inst);
+      writef("INST: 0x%.2X, IO REG: 0x%.2X\n", inst, memGet(0xFF50));
+      if(memGet(0xFF50))
+      {
+         writeln("helloworld");
+      }
       switch(inst) { 
          case 0x00: 
             reg.pc++;
             numCycles+=4;
-            break; 
+            break;
+         case 0x04:
+            reg.pc++;
+            numCycles+=4;
+            setH((reg.b & 0b00001111) == 0xFF);
+            reg.b++;
+            setN(0);
+            setZ(!reg.b);
+            break;
          case 0x05:
             reg.pc++;
             numCycles+=4;
-            if((reg.b & 0b00001111) >= 1)
-            {
-               setH(1);
-            }
-            else
-            {
-               setH(0);
-            }
+            setH((reg.b & 0b00001111) >= 1);
             reg.b--;
-            if(reg.b)
-            {
-               setZ(0);
-            }
-            else
-            {
-               setZ(1);
-            }
+            setZ(!reg.b);
             setN(1);
             break;
          case 0x06:
@@ -245,24 +241,18 @@ int step()
          case 0x0C:
             reg.pc++;
             numCycles+=4;
-            if((reg.c & 0b00001111) == 0xFF)
-            {
-               setH(1);
-            }
-            else
-            {
-               setH(0);
-            }
+            setH((reg.c & 0b00001111) == 0xFF);
             reg.c++;
             setN(0);
-            if(reg.c == 0)
-            {
-               setZ(1);
-            }
-            else
-            {
-               setZ(0);
-            }
+            setZ(!reg.c);
+            break;
+         case 0x0D:
+            reg.pc++; 
+            numCycles+=4;
+            setH((reg.c & 0b00001111) >= 1);
+            reg.c--;
+            setZ(!reg.c);
+            setN(1);
             break;
          case 0x0E:
             reg.pc++; 
@@ -282,11 +272,6 @@ int step()
             reg.pc++;
             numCycles+=8;
             reg.de++;
-            break;
-         case 0x1A:
-            reg.pc++; 
-            numCycles+=8;
-            reg.a = memGet(reg.de);
             break;
          case 0x17:
             reg.pc++;
@@ -309,6 +294,23 @@ int step()
                setZ(0);
             }
             break;
+         case 0x18:
+            reg.pc++;
+            numCycles+=8;
+            byte offset = memGet(reg.pc++);
+            reg.pc += offset;
+            break; 
+         case 0x1A:
+            reg.pc++; 
+            numCycles+=8;
+            reg.a = memGet(reg.de);
+            break;
+         case 0x1E:
+            reg.pc++; 
+            numCycles+=8;
+            ubyte nn = memGet(reg.pc++);
+            reg.e = nn;
+            break; 
          case 0x20:
             reg.pc++;
             numCycles+=8;
@@ -341,6 +343,25 @@ int step()
             numCycles+=8;
             reg.hl++;
             break;
+         case 0x28:
+            reg.pc++;
+            numCycles+=8;
+            if(getZ())
+            {
+               byte offset = memGet(reg.pc++);
+               reg.pc += offset;
+            }
+            else
+            {
+               reg.pc++;
+            }
+            break;  
+         case 0x2E:
+            reg.pc++; 
+            numCycles+=8;
+            ubyte nn = memGet(reg.pc++);
+            reg.l = nn;
+            break;          
          case 0x31:
             reg.pc++;
             ubyte low = memGet(reg.pc++);
@@ -355,6 +376,14 @@ int step()
             memSet(reg.a, reg.hl);
             reg.hl--;
             break;
+         case 0x3D:
+            reg.pc++;
+            numCycles+=4;
+            setH((reg.a & 0b00001111) >= 1);
+            reg.a--;
+            setZ(!reg.a);
+            setN(1);
+            break;
          case 0x3E:
             reg.pc++; 
             numCycles+=8;
@@ -365,6 +394,16 @@ int step()
             reg.pc++;
             numCycles+=4;
             reg.c = reg.a;
+            break;
+         case 0x57: 
+            reg.pc++;
+            numCycles+=4;
+            reg.d = reg.a;
+            break;
+         case 0x67: 
+            reg.pc++;
+            numCycles+=4;
+            reg.h = reg.a;
             break;
          case 0x77: 
             reg.pc++;
@@ -474,6 +513,20 @@ int step()
             numCycles+=8;
             memSet(reg.a, reg.c + 0xFF00);
             break;
+         case 0xEA:
+            reg.pc++;
+            numCycles+=16;
+            ubyte low = memGet(reg.pc++);
+            ubyte high = memGet(reg.pc++);
+            ushort nn = (high << 8) + low;
+            memSet(reg.a, nn);
+            break;
+         case 0xF0:
+            reg.pc++;
+            numCycles+=12;
+            ubyte n = memGet(reg.pc++);
+            reg.a = memGet(0xFF00 + n);
+            break;
          case 0xFE:
             reg.pc++;
             numCycles+=8;
@@ -506,6 +559,7 @@ int step()
             setN(1);
             break;
          default : 
+            writeln(numCycles);
             writef("Invalid Instruction: 0x%.2X\n", memGet(reg.pc));
             return 0;
       }
