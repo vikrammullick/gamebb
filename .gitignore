@@ -1,1 +1,16 @@
+.dub
+docs.json
+__dummy.html
+docs/
+/gamebb
+gamebb.so
+gamebb.dylib
+gamebb.dll
+gamebb.a
+gamebb.lib
+gamebb-test-*
+*.exe
+*.o
+*.obj
+*.lst
 .DS_Store

@@ -1,0 +1,12 @@
+{
+	"authors": [
+		"Vikram Mullick"
+	],
+	"copyright": "Copyright © 2020, Vikram Mullick",
+	"dependencies": {
+		"derelict-sdl2": "~>2.1.4"
+	},
+	"description": "gamebb: Game Boy Emulator in D",
+	"license": "proprietary",
+	"name": "gamebb"
+}
